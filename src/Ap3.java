@@ -170,7 +170,7 @@ class App {
 			conn = DriverManager.getConnection(jdbcURL, username, password);
 
 
-			stmt = conn.prepareStatement("insert into casa_apostas(nome, nipc, aposta_minima) values (?, ?,?)");
+			stmt = conn.prepareStatement("insert into casa_apostas(nome, nipc, aposta_minima) values (?, ?, ?)");
 
 
 			System.out.print("nome da casa de apostas > ");
@@ -327,8 +327,8 @@ class App {
 
 			stmt = conn.prepareStatement(
 					"""
-							select deposito.nome, sum(COALESCE(deposito.sum_deposito,0) - COALESCE(levantamento.sum_levantamento,0) - COALESCE(valor_aposta.sum_aposta ,0) + COALESCE(valor_resultado.sum_resultado,0)) as saldo
-							from (select j.nome, sum(t.valor) sum_deposito
+							select deposito.nome, deposito.casa_apostas, deposito.id,sum(COALESCE(deposito.sum_deposito,0) - COALESCE(levantamento.sum_levantamento,0) - COALESCE(valor_aposta.sum_aposta ,0) + COALESCE(valor_resultado.sum_resultado,0)) as saldo
+							from (select j.nome, sum(t.valor) sum_deposito, j.id, j.casa_apostas
 								from jogador j\s
 								full join transacao t on t.jogador = j.id\s
 								full join bancaria b on b.transacao = t.numero\s
@@ -349,13 +349,85 @@ class App {
 								full join aposta a on a.transacao = t.numero\t\s
 								full join resolucao r on r.aposta = a.transacao\s
 								group by j.nome, r.resultado) valor_resultado on deposito.nome = valor_resultado.nome
-							group by deposito.nome\s
+							group by deposito.nome, deposito.casa_apostas, deposito.id
 							having deposito.nome = ?\s""");
 
-			stmt.setString(1,"Pedro Menezes");
-			ResultSet rs = stmt.executeQuery();
-			if(rs.next()){System.out.println(rs.getString("nome") + " --> " + rs.getString("saldo"));}
+			Statement prepJogadores =conn.createStatement();
+			ResultSet rsJogador = prepJogadores.executeQuery("select * from jogador ");
 
+			if (!rsJogador.next()) {
+				System.out.println("No players registered");
+				return;
+			} else {
+				System.out.println("\nList Of All Players registered:");
+				System.out.println(rsJogador.getString("nome"));
+				while (rsJogador.next()) {
+					System.out.println(rsJogador.getString("nome"));
+				}
+			}
+
+
+			System.out.print("nome de player  > ");
+			Scanner scannerNomePlayer = new Scanner(System.in);
+			String NomePlayer = scannerNomePlayer.nextLine();
+
+			stmt.setString(1,NomePlayer);
+
+			ResultSet resultOfNomePlayer = stmt.executeQuery();
+
+
+			System.out.print("value of bet  > ");
+			Scanner scannerValueBet = new Scanner(System.in);
+			int ValueBet =  scannerValueBet.nextInt();
+
+			if(!resultOfNomePlayer.next()){
+				System.out.println("No result no player with that name");
+				return;
+			}
+			System.out.println("saldo ---> " + resultOfNomePlayer.getInt("saldo"));
+
+			if(resultOfNomePlayer.getInt("saldo") < ValueBet) {
+				System.out.println("You dont have enough balance");
+				return;
+			}
+
+			PreparedStatement createTransaction = conn.prepareStatement("insert into transacao values(?,?,current_date ,?,?)");
+
+			System.out.print("number of Transaction  > ");
+			Scanner scannerTransaction = new Scanner(System.in);
+			int Transaction =  scannerTransaction.nextInt();
+
+
+			createTransaction.setInt(1, Transaction);
+			createTransaction.setInt(2, ValueBet);
+			createTransaction.setInt(3, resultOfNomePlayer.getInt("casa_apostas"));
+			createTransaction.setInt(4, resultOfNomePlayer.getInt("id"));
+
+			int resultofTransaction = createTransaction.executeUpdate();
+
+			PreparedStatement createBet = conn.prepareStatement("insert into aposta values(?,?,?,?)");
+
+			System.out.print("Type of Bet  [simples | múltipla] > ");
+			Scanner scannerTypeOfBet = new Scanner(System.in);
+			String typeOfBet =  scannerTypeOfBet.nextLine();
+
+			System.out.print("odd of Bet  > ");
+			Scanner scannerOddOfBet = new Scanner(System.in);
+			int oddOfBet =  scannerOddOfBet.nextInt();
+
+			System.out.print("description of Bet  > ");
+			Scanner scannerDescriptionOfBet = new Scanner(System.in);
+			String descriptionOfBet =  scannerDescriptionOfBet.nextLine();
+
+			createBet.setInt(1, Transaction);
+			createBet.setString(2, typeOfBet);
+			createBet.setInt(3, oddOfBet);
+			createBet.setString(4, descriptionOfBet);
+
+			int resultOfAposta = createBet.executeUpdate();
+
+			System.out.println(resultofTransaction);
+			System.out.println("acabou");
 
 
 
